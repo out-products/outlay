@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>outlay — 間取り図を、誰でも。</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #fafaf7;
+    --paper-2: #f3f2ec;
+    --ink: #1a1a1a;
+    --ink-2: #4a4a4a;
+    --ink-3: #8a8a85;
+    --line: #d8d6cc;
+    --line-2: #e8e6dc;
+    --accent: #d4493d;
+    --accent-soft: #f0d4d0;
+    --grid: #e0ddd0;
+    --shadow: 0 1px 0 rgba(26,26,26,0.04), 0 8px 24px -12px rgba(26,26,26,0.12);
+
+    /* mode colors */
+    --mode-place: #1a1a1a;
+    --mode-opening: #2d6cdf;
+    --mode-preview: #2c8a4f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; font-family: 'Noto Sans JP', sans-serif; color: var(--ink); background: var(--paper); font-feature-settings: "palt"; letter-spacing: 0.01em; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: 'Space Mono', monospace; letter-spacing: 0; }
+  .serif { font-family: 'Noto Serif JP', serif; }
+  .app { max-width: 480px; margin: 0 auto; height: 100vh; height: 100dvh; background: var(--paper); border-left: 1px solid var(--line); border-right: 1px solid var(--line); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+
+  header { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); background: var(--paper); display: flex; align-items: baseline; justify-content: space-between; position: relative; }
+  header::after { content: ''; position: absolute; left: 20px; right: 20px; bottom: -1px; height: 2px; background: var(--ink); width: 24px; }
+  .brand { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 22px; letter-spacing: -0.02em; color: var(--ink); }
+  .brand .accent { color: var(--accent); }
+  .brand-tag { font-size: 10px; color: var(--ink-3); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .screen { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+  .screen.active { display: flex; }
+
+  /* Home */
+  .home { padding: 28px 20px; overflow-y: auto; }
+  .home h1 { font-family: 'Noto Serif JP', serif; font-weight: 400; font-size: 28px; line-height: 1.4; margin-bottom: 4px; letter-spacing: 0.02em; }
+  .home .sub { font-size: 12px; color: var(--ink-3); margin-bottom: 28px; letter-spacing: 0.05em; }
+  .home .sub::before { content: '— '; }
+  .property-card { background: var(--paper); border: 1px solid var(--line); padding: 18px 16px; margin-bottom: 12px; cursor: pointer; transition: border-color 0.15s, transform 0.15s; position: relative; }
+  .property-card:active { transform: scale(0.99); }
+  .property-card:hover { border-color: var(--ink-2); }
+  .property-card .corner { position: absolute; top: -1px; right: -1px; width: 16px; height: 16px; border-top: 1px solid var(--ink); border-right: 1px solid var(--ink); }
+  .property-card .name { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+  .property-card .meta { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); display: flex; gap: 12px; }
+  .property-card .meta span::before { content: '— '; color: var(--line); }
+  .new-btn { width: 100%; padding: 18px; background: var(--ink); color: var(--paper); border: none; font-family: 'Noto Sans JP', sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 0.05em; cursor: pointer; margin-top: 16px; transition: background 0.15s; position: relative; }
+  .new-btn:active { background: var(--ink-2); }
+  .new-btn::before { content: '+'; margin-right: 10px; font-family: 'Space Mono', monospace; }
+  .section-label { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--ink-3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px; margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  /* Dialog */
+  .dialog-header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; background: var(--paper); }
+  .back-btn { background: none; border: none; font-family: 'Space Mono', monospace; font-size: 13px; color: var(--ink-2); cursor: pointer; padding: 4px 0; }
+  .back-btn::before { content: '← '; }
+  .step-indicator { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); letter-spacing: 0.05em; }
+  .dialog-progress { height: 2px; background: var(--line-2); position: relative; }
+  .dialog-progress-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); width: 25%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+  .dialog-body { flex: 1; padding: 36px 24px 24px; overflow-y: auto; display: flex; flex-direction: column; }
+  .q-num { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 0.1em; margin-bottom: 14px; }
+  .q-num::before { content: '— Q.0'; }
+  .q-text { font-family: 'Noto Serif JP', serif; font-weight: 400; font-size: 26px; line-height: 1.5; margin-bottom: 28px; letter-spacing: 0.02em; }
+  .q-hint { font-size: 12px; color: var(--ink-3); line-height: 1.7; margin-bottom: 32px; padding: 14px 16px; background: var(--paper-2); border-left: 2px solid var(--accent); }
+  .room-types { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .room-type { padding: 18px 14px; background: var(--paper); border: 1px solid var(--line); cursor: pointer; text-align: left; transition: all 0.15s; font-family: 'Noto Sans JP', sans-serif; font-size: 14px; position: relative; }
+  .room-type:active { transform: scale(0.98); }
+  .room-type.selected { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+  .room-type.selected::after { content: '✓'; position: absolute; top: 8px; right: 10px; font-size: 12px; }
+  .room-type .label-en { display: block; font-family: 'Space Mono', monospace; font-size: 10px; color: var(--ink-3); margin-top: 4px; }
+  .room-type.selected .label-en { color: var(--accent-soft); }
+  .dim-input { margin-bottom: 24px; }
+  .dim-input label { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 8px; letter-spacing: 0.05em; }
+  .dim-row { display: flex; align-items: baseline; gap: 12px; border-bottom: 2px solid var(--ink); padding-bottom: 8px; }
+  .dim-row input { flex: 1; border: none; background: transparent; font-family: 'Space Mono', monospace; font-size: 36px; font-weight: 700; color: var(--ink); outline: none; width: 100%; letter-spacing: -0.02em; }
+  .dim-row .unit { font-family: 'Space Mono', monospace; font-size: 14px; color: var(--ink-3); }
+  .preview { margin-top: 32px; padding: 20px; background: var(--paper-2); border: 1px dashed var(--line); position: relative; }
+  .preview::before { content: 'PREVIEW'; position: absolute; top: -7px; left: 16px; background: var(--paper); padding: 0 8px; font-family: 'Space Mono', monospace; font-size: 9px; color: var(--ink-3); letter-spacing: 0.2em; }
+  .preview-shape { margin: 0 auto 14px; position: relative; border: 2px solid var(--ink); background: var(--paper); transition: all 0.3s; }
+  .preview-data { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-2); line-height: 1.9; }
+  .preview-data .row { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--line); padding: 2px 0; }
+  .preview-data .row:last-child { border-bottom: none; }
+  .preview-data .key { color: var(--ink-3); }
+  .preview-data .val { color: var(--ink); font-weight: 700; }
+  .preview-data .val.accent { color: var(--accent); }
+  .rotate-btn {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--paper);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .rotate-btn:active { background: var(--accent); color: var(--paper); }
+  .rotate-icon {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    display: inline-block;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .rotate-btn.rotating .rotate-icon { transform: rotate(90deg); }
+  .dialog-footer { padding: 16px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; background: var(--paper); }
+  .btn { flex: 1; padding: 16px; font-family: 'Noto Sans JP', sans-serif; font-size: 14px; font-weight: 500; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; letter-spacing: 0.05em; transition: all 0.15s; }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: var(--ink); color: var(--paper); }
+  .btn.primary:active { background: var(--ink-2); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Room list */
+  .roomlist { padding: 24px 20px; overflow-y: auto; flex: 1; }
+  .property-title { font-family: 'Noto Serif JP', serif; font-size: 22px; margin-bottom: 4px; }
+  .property-sub { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); margin-bottom: 24px; }
+  .property-sub::before { content: '— '; }
+  .room-item { display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line-2); }
+  .room-thumb { aspect-ratio: 1; border: 1.5px solid var(--ink); background: var(--paper-2); position: relative; }
+  .room-thumb::after { content: ''; position: absolute; inset: 4px; border: 1px dashed var(--line); }
+  .room-info .name { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+  .room-info .dim { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); }
+  .room-tatami { font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; color: var(--ink); }
+  .room-tatami small { font-size: 10px; color: var(--ink-3); font-weight: 400; }
+  .add-room-btn { width: 100%; padding: 14px; margin-top: 16px; background: var(--paper); border: 1px dashed var(--ink-2); font-family: 'Noto Sans JP', sans-serif; font-size: 13px; color: var(--ink-2); cursor: pointer; letter-spacing: 0.05em; }
+  .add-room-btn::before { content: '+ '; font-family: 'Space Mono', monospace; }
+  .next-btn { width: 100%; padding: 18px; margin-top: 24px; background: var(--ink); color: var(--paper); border: none; font-size: 14px; font-weight: 500; letter-spacing: 0.05em; cursor: pointer; }
+  .next-btn::after { content: ' →'; font-family: 'Space Mono', monospace; }
+
+  /* ============ Layout / Mode tabs ============ */
+  .mode-tabs {
+    display: flex;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+  }
+  .mode-tab {
+    flex: 1;
+    padding: 14px 8px 12px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
+    letter-spacing: 0.04em;
+    transition: all 0.18s;
+    position: relative;
+  }
+  .mode-tab .tab-num {
+    display: block;
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    margin-bottom: 4px;
+    letter-spacing: 0.15em;
+    opacity: 0.6;
+  }
+  .mode-tab.active {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+  .mode-tab.active[data-mode="opening"] {
+    color: var(--mode-opening);
+    border-bottom-color: var(--mode-opening);
+  }
+  .mode-tab.active[data-mode="preview"] {
+    color: var(--mode-preview);
+    border-bottom-color: var(--mode-preview);
+  }
+  .mode-tab:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* Canvas */
+  .canvas-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  .canvas-area { flex: 1; background: var(--paper-2); position: relative; overflow: hidden; }
+  #floor-canvas { width: 100%; height: 100%; display: block; }
+
+  .layout-instruction {
+    padding: 10px 16px;
+    color: var(--ink);
+    font-size: 12px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+    font-weight: 500;
+    background: var(--accent-soft);
+  }
+  .layout-instruction[data-mode="opening"] {
+    background: #d6e3f5;
+    border-color: var(--mode-opening);
+  }
+  .layout-instruction[data-mode="preview"] {
+    background: #d4ead9;
+    border-color: var(--mode-preview);
+  }
+
+  /* Bottom toolbar (room chips for place mode, opening types for opening mode) */
+  .layout-toolbar {
+    padding: 12px 16px;
+    background: var(--paper);
+    border-top: 1px solid var(--line);
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 56px;
+    align-items: center;
+  }
+  .toolbar-empty {
+    color: var(--ink-3);
+    font-size: 12px;
+    font-family: 'Space Mono', monospace;
+    width: 100%;
+    text-align: center;
+  }
+  .tool-chip { padding: 10px 14px; border: 1px solid var(--line); background: var(--paper); font-family: 'Noto Sans JP', sans-serif; font-size: 12px; white-space: nowrap; cursor: pointer; letter-spacing: 0.03em; flex-shrink: 0; }
+  .tool-chip.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .tool-chip .badge { font-family: 'Space Mono', monospace; font-size: 10px; margin-left: 6px; opacity: 0.6; }
+  .tool-chip.opening-type {
+    border-color: var(--mode-opening);
+    color: var(--mode-opening);
+  }
+  .tool-chip.opening-type.active {
+    background: var(--mode-opening);
+    color: var(--paper);
+  }
+
+  /* Cross panel */
+  .cross-panel {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    padding: 10px 12px;
+    display: none;
+    z-index: 50;
+    user-select: none;
+  }
+  .cross-panel.show { display: block; }
+  .cross-panel.opening-mode { border-color: var(--mode-opening); }
+  .cross-panel .label { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--ink-3); text-align: center; margin-bottom: 6px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .cross-grid { display: grid; grid-template-columns: 40px 40px 40px; grid-template-rows: 40px 40px 40px; gap: 4px; }
+  .cross-btn { border: 1px solid var(--line); background: var(--paper); cursor: pointer; font-family: 'Space Mono', monospace; font-size: 16px; color: var(--ink); display: flex; align-items: center; justify-content: center; transition: all 0.1s; }
+  .cross-btn:active { background: var(--ink); color: var(--paper); }
+  .cross-btn.center { background: var(--ink); color: var(--paper); font-size: 9px; cursor: default; }
+  .cross-btn.disabled { opacity: 0.3; pointer-events: none; }
+  .cross-panel.opening-mode .cross-btn.center { background: var(--mode-opening); }
+  .step-toggle { display: flex; gap: 4px; margin-top: 8px; border-top: 1px solid var(--line-2); padding-top: 8px; }
+  .step-toggle button { flex: 1; padding: 6px 8px; border: 1px solid var(--line); background: var(--paper); font-family: 'Space Mono', monospace; font-size: 10px; cursor: pointer; color: var(--ink-2); }
+  .step-toggle button.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .cross-panel.opening-mode .step-toggle button.active { background: var(--mode-opening); border-color: var(--mode-opening); }
+
+  .cross-actions { display: flex; gap: 4px; margin-top: 8px; border-top: 1px solid var(--line-2); padding-top: 8px; }
+  .cross-actions button { flex: 1; padding: 8px; border: 1px solid var(--line); background: var(--paper); font-family: 'Noto Sans JP', sans-serif; font-size: 11px; cursor: pointer; color: var(--ink-2); }
+  .cross-actions button.danger { color: var(--accent); border-color: var(--accent); }
+  .cross-actions button.done { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .cross-panel.opening-mode .cross-actions button.done { background: var(--mode-opening); border-color: var(--mode-opening); }
+
+  .selection-info { position: absolute; top: 16px; left: 16px; background: var(--ink); color: var(--paper); padding: 8px 12px; font-size: 11px; font-family: 'Space Mono', monospace; display: none; z-index: 50; }
+  .selection-info.show { display: block; }
+  .selection-info.opening-mode { background: var(--mode-opening); }
+
+  .mode-hint {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    color: var(--ink-3);
+    letter-spacing: 0.05em;
+    z-index: 40;
+  }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--paper); padding: 12px 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.3s; z-index: 100; box-shadow: var(--shadow); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* SVG */
+  .dim-text { fill: var(--accent); font-family: 'Space Mono', monospace; font-size: 9px; }
+
+  /* Place mode visuals */
+  .room-rect { fill: var(--paper); stroke: var(--ink); stroke-width: 2; cursor: pointer; }
+  .room-rect.selected { stroke: var(--accent); stroke-width: 3; fill: rgba(212,73,61,0.05); }
+  .room-rect.locked { cursor: default; pointer-events: none; }
+  .room-label { fill: var(--ink); font-family: 'Noto Sans JP', sans-serif; font-size: 11px; text-anchor: middle; pointer-events: none; }
+  .room-label-en { fill: var(--ink-3); font-family: 'Space Mono', monospace; font-size: 8px; text-anchor: middle; pointer-events: none; }
+  .edge-highlight { stroke: var(--accent); stroke-width: 4; cursor: pointer; }
+  .edge-highlight-blue {
+    stroke: var(--mode-opening);
+    stroke-width: 10;
+    stroke-opacity: 0.55;
+    cursor: pointer;
+    transition: stroke-opacity 0.15s;
+  }
+  .edge-highlight-blue:hover { stroke-opacity: 0.95; }
+  .edge-label {
+    fill: var(--mode-opening);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: #fafaf7;
+    stroke-width: 3;
+  }
+
+  /* Opening mode visuals */
+  .room-rect.opening-target { cursor: pointer; }
+  .room-rect.opening-target.target-active { stroke: var(--mode-opening); fill: rgba(45,108,223,0.05); }
+
+  /* collision warning */
+  .room-rect.collision {
+    fill: rgba(212,73,61,0.15);
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-dasharray: 6 3;
+    animation: collision-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes collision-pulse {
+    0%, 100% { fill: rgba(212,73,61,0.10); }
+    50%      { fill: rgba(212,73,61,0.22); }
+  }
+  .collision-icon {
+    fill: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    text-anchor: middle;
+    pointer-events: none;
+  }
+  .collision-banner {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: var(--paper);
+    padding: 10px 16px;
+    font-size: 12px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 500;
+    z-index: 60;
+    display: none;
+    box-shadow: 0 4px 12px rgba(212,73,61,0.3);
+    letter-spacing: 0.05em;
+  }
+  .collision-banner.show { display: block; }
+  .collision-banner::before {
+    content: '⚠ ';
+    font-family: 'Space Mono', monospace;
+  }
+
+  .opening-bg { fill: var(--paper-2); }
+  .opening-window-line { stroke: var(--ink); stroke-width: 1; }
+  .opening-door-arc { stroke: var(--ink); stroke-width: 1; fill: none; }
+  .opening-door-leaf { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+  .opening-handle { fill: transparent; cursor: pointer; }
+  .opening-handle.selected { fill: rgba(45,108,223,0.15); stroke: var(--mode-opening); stroke-width: 1; stroke-dasharray: 2 2; }
+  .opening-ghost { fill: rgba(45,108,223,0.2); stroke: var(--mode-opening); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+
+  /* origin marker */
+  .origin-mark { stroke: var(--accent); stroke-width: 1; fill: none; }
+  .origin-text { fill: var(--accent); font-family: 'Space Mono', monospace; font-size: 8px; }
+
+  .empty { text-align: center; padding: 40px 20px; color: var(--ink-3); font-size: 13px; }
+  .empty-mark { font-family: 'Space Mono', monospace; font-size: 32px; color: var(--line); margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div><span class="brand">out<span class="accent">l</span>ay</span></div>
+    <span class="brand-tag mono">v0.5 · prototype</span>
+  </header>
+
+  <!-- Home -->
+  <div id="screen-home" class="screen active home">
+    <h1>間取り図を、<br>誰でも。</h1>
+    <p class="sub">lay it out. for everyone.</p>
+    <div class="section-label">物件一覧 / Properties</div>
+    <div id="property-list"></div>
+    <button class="new-btn" onclick="startNewProperty()">新しい物件をつくる</button>
+  </div>
+
+  <!-- Dialog -->
+  <div id="screen-dialog" class="screen">
+    <div class="dialog-header">
+      <button class="back-btn" onclick="dialogBack()">戻る</button>
+      <span class="step-indicator">STEP <span id="step-now">1</span> / 4</span>
+    </div>
+    <div class="dialog-progress"><div id="progress-bar" class="dialog-progress-bar"></div></div>
+    <div class="dialog-body">
+      <div id="step-1" class="dialog-step">
+        <div class="q-num">1</div>
+        <div class="q-text">どんな部屋ですか？</div>
+        <div class="room-types">
+          <button class="room-type" onclick="selectRoomType(this, '洋室')">洋室<span class="label-en">Western</span></button>
+          <button class="room-type" onclick="selectRoomType(this, '和室')">和室<span class="label-en">Japanese</span></button>
+          <button class="room-type" onclick="selectRoomType(this, 'LDK')">LDK<span class="label-en">Living-Dining-Kitchen</span></button>
+          <button class="room-type" onclick="selectRoomType(this, 'DK')">DK<span class="label-en">Dining-Kitchen</span></button>
+          <button class="room-type" onclick="selectRoomType(this, 'K')">K<span class="label-en">Kitchen</span></button>
+          <button class="room-type" onclick="selectRoomType(this, '浴室')">浴室<span class="label-en">Bath</span></button>
+          <button class="room-type" onclick="selectRoomType(this, 'トイレ')">トイレ<span class="label-en">Toilet</span></button>
+          <button class="room-type" onclick="selectRoomType(this, '洗面')">洗面<span class="label-en">Lavatory</span></button>
+          <button class="room-type" onclick="selectRoomType(this, '玄関')">玄関<span class="label-en">Entrance</span></button>
+          <button class="room-type" onclick="selectRoomType(this, '廊下')">廊下<span class="label-en">Corridor</span></button>
+        </div>
+      </div>
+      <div id="step-2" class="dialog-step" style="display:none;">
+        <div class="q-num">2</div>
+        <div class="q-text">幅(横)の<br>内法寸法は？</div>
+        <div class="q-hint">メジャーで部屋の<strong>内側〜内側</strong>を実測した値をミリで入れてください。<br>例: 2m58cm → <span class="mono">2580</span></div>
+        <div class="dim-input">
+          <label class="mono">WIDTH (内法)</label>
+          <div class="dim-row"><input type="number" id="input-width" inputmode="numeric" placeholder="2580" onfocus="this.select()"><span class="unit">mm</span></div>
+        </div>
+      </div>
+      <div id="step-3" class="dialog-step" style="display:none;">
+        <div class="q-num">3</div>
+        <div class="q-text">奥行き(縦)の<br>内法寸法は？</div>
+        <div class="q-hint">幅と直角の方向を実測した値をミリで入れてください。</div>
+        <div class="dim-input">
+          <label class="mono">DEPTH (内法)</label>
+          <div class="dim-row"><input type="number" id="input-depth" inputmode="numeric" placeholder="3580" onfocus="this.select()"><span class="unit">mm</span></div>
+        </div>
+      </div>
+      <div id="step-4" class="dialog-step" style="display:none;">
+        <div class="q-num">4</div>
+        <div class="q-text">確認してください</div>
+        <div class="preview">
+          <div style="display:flex; justify-content:center; padding: 20px 0;"><div id="preview-shape" class="preview-shape"></div></div>
+          <div class="preview-data">
+            <div class="row"><span class="key">部屋種別 / type</span><span class="val" id="prev-type">—</span></div>
+            <div class="row"><span class="key">内法 / inner</span><span class="val" id="prev-inner">—</span></div>
+            <div class="row"><span class="key">芯々 / center</span><span class="val accent" id="prev-center">—</span></div>
+            <div class="row"><span class="key">グリッド / grid</span><span class="val" id="prev-grid">—</span></div>
+            <div class="row"><span class="key">畳数 / tatami</span><span class="val" id="prev-tatami">—</span></div>
+          </div>
+          <button class="rotate-btn" onclick="rotateDialog()">
+            <span class="rotate-icon">⟲</span> 90度回転(幅↔奥行)
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn" onclick="dialogBack()" id="btn-back">戻る</button>
+      <button class="btn primary" onclick="dialogNext()" id="btn-next">次へ</button>
+    </div>
+  </div>
+
+  <!-- Room List -->
+  <div id="screen-roomlist" class="screen">
+    <div class="dialog-header">
+      <button class="back-btn" onclick="goHome()">物件一覧</button>
+      <span class="step-indicator mono">ROOMS</span>
+    </div>
+    <div class="roomlist">
+      <div class="property-title" id="property-name">新しい物件</div>
+      <div class="property-sub mono" id="property-meta">作成中</div>
+      <div class="section-label">登録した部屋 <span id="room-count" style="font-family:'Space Mono',monospace;">0</span></div>
+      <div id="room-list-items"></div>
+      <button class="add-room-btn" onclick="startNewRoom()">部屋を追加する</button>
+      <button class="next-btn" onclick="goLayout()" id="goto-layout-btn" disabled style="opacity:0.4;">配置画面へ</button>
+    </div>
+  </div>
+
+  <!-- Layout -->
+  <div id="screen-layout" class="screen">
+    <div class="dialog-header">
+      <button class="back-btn" onclick="backToRoomList()">部屋一覧</button>
+      <span class="step-indicator mono" id="layout-status">LAYOUT</span>
+    </div>
+
+    <!-- mode tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="place" onclick="switchMode('place')">
+        <span class="tab-num">01</span>配置
+      </button>
+      <button class="mode-tab" data-mode="opening" onclick="switchMode('opening')">
+        <span class="tab-num">02</span>開口
+      </button>
+      <button class="mode-tab" data-mode="preview" onclick="switchMode('preview')">
+        <span class="tab-num">03</span>完成
+      </button>
+    </div>
+
+    <div class="layout-instruction" id="layout-msg" data-mode="place">
+      下の部屋カードをタップして最初の部屋を配置(原点になります)
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="canvas-area" id="canvas-area">
+        <svg id="floor-canvas" viewBox="0 0 480 540" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="collision-banner" class="collision-banner">部屋が重なっています</div>
+        <div id="selection-info" class="selection-info"></div>
+        <div id="mode-hint" class="mode-hint">PLACE MODE</div>
+
+        <!-- Cross control -->
+        <div id="cross-panel" class="cross-panel">
+          <div class="label" id="cross-label">MOVE</div>
+          <div class="cross-grid">
+            <div class="cross-btn disabled"></div>
+            <div class="cross-btn" id="btn-up" onclick="moveSelected(0, 1)">↑</div>
+            <div class="cross-btn disabled"></div>
+            <div class="cross-btn" id="btn-left" onclick="moveSelected(-1, 0)">←</div>
+            <div class="cross-btn center" id="step-display">910</div>
+            <div class="cross-btn" id="btn-right" onclick="moveSelected(1, 0)">→</div>
+            <div class="cross-btn disabled"></div>
+            <div class="cross-btn" id="btn-down" onclick="moveSelected(0, -1)">↓</div>
+            <div class="cross-btn disabled"></div>
+          </div>
+          <div class="step-toggle">
+            <button data-step="105" onclick="setStep(105)">105</button>
+            <button data-step="455" onclick="setStep(455)">455</button>
+            <button data-step="910" class="active" onclick="setStep(910)">910</button>
+            <button data-step="1820" onclick="setStep(1820)">1820</button>
+          </div>
+          <div class="cross-actions">
+            <button class="danger" onclick="deleteSelected()">削除</button>
+            <button id="rotate-room-btn" onclick="rotateSelectedRoom()" style="display:none;">⟲ 回転</button>
+            <button class="done" onclick="deselectAll()">完了</button>
+          </div>
+        </div>
+      </div>
+      <div class="layout-toolbar" id="layout-toolbar"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ============================================
+// outlay v0.3 - mode-separated UI
+// ============================================
+
+const STATE = {
+  property: null,
+  properties: [
+    { id: 'sample', name: 'サンプル物件 1K', created: '2026-04-27', rooms: 3 }
+  ],
+  dialog: { step: 1, roomType: null, width: null, depth: null },
+
+  // 配置モード関連
+  placed: [],                 // [{ id, roomId, x, y }]
+  pendingRoom: null,          // 接続待ちの部屋ID
+
+  // 開口モード関連
+  openings: [],               // [{ id, roomPlacedId, side, offset, width, type }]
+  pendingOpeningType: null,   // 追加待ちの開口部タイプ
+  pendingOpeningRoom: null,   // 開口部追加先として選択された部屋ID(辺選択フェーズ)
+  
+  // 共通
+  mode: 'place',              // 'place' | 'opening' | 'preview'
+  selection: null,            // { type: 'room'|'opening', id }
+  moveStep: 910,
+};
+
+const GRID = 910;
+const WALL_THICKNESS = 105;
+
+const OPENING_TYPES = {
+  'door-single':  { label: '片開ドア', defaultWidth: 780 },
+  'door-double':  { label: '両開ドア', defaultWidth: 1640 },
+  'door-slide':   { label: '引戸',     defaultWidth: 1640 },
+  'window':       { label: '窓',       defaultWidth: 1640 },
+  'window-large': { label: '掃出窓',   defaultWidth: 1640 },
+  'opening':      { label: '開口',     defaultWidth: 910 },
+};
+
+// ===== util =====
+function $(id) { return document.getElementById(id); }
+function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); $(id).classList.add('active'); }
+function showToast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._timer); t._timer = setTimeout(() => t.classList.remove('show'), 1800); }
+
+// ===== coordinate (左下原点・Y上向き → SVG変換) =====
+function getBBox() {
+  if (STATE.placed.length === 0) return { minX: 0, maxX: 7280, minY: 0, maxY: 7280 };
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  STATE.placed.forEach(p => {
+    const room = STATE.property.rooms.find(r => r.id === p.roomId);
+    if (!room) return;
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x + room.center_w);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y + room.center_d);
+  });
+  return { minX, maxX, minY, maxY };
+}
+
+function getViewTransform() {
+  const bb = getBBox();
+  const svgW = 480, svgH = 540, padding = 70;
+  const dataW = (bb.maxX - bb.minX) || 3640;
+  const dataH = (bb.maxY - bb.minY) || 3640;
+  const scale = Math.min((svgW - padding * 2) / dataW, (svgH - padding * 2) / dataH);
+  const cx = (bb.minX + bb.maxX) / 2, cy = (bb.minY + bb.maxY) / 2;
+  return { scale, tx: svgW / 2 - cx * scale, ty: svgH / 2 + cy * scale };
+}
+
+function w2s(x, y, t) { return { x: t.tx + x * t.scale, y: t.ty - y * t.scale }; }
+
+// ===== collision detection =====
+// 2つの矩形が「重なってる(内部が交差)」を判定
+// 隣接(辺が接するだけ)は重なりとしない
+function rectsOverlap(a, b) {
+  const aw = a.w, ad = a.d, bw = b.w, bd = b.d;
+  // 辺接触は許容するため、strict less-than/greater-than を使う
+  if (a.x + aw <= b.x) return false; // aの右端 ≤ bの左端
+  if (b.x + bw <= a.x) return false; // bの右端 ≤ aの左端
+  if (a.y + ad <= b.y) return false; // aの上端 ≤ bの下端
+  if (b.y + bd <= a.y) return false; // bの上端 ≤ aの下端
+  return true;
+}
+
+// 配置済み部屋の中で、指定した部屋IDを除いて重なる部屋を探す
+function findOverlappingRooms(targetPlacedId, x, y, w, d) {
+  const result = [];
+  STATE.placed.forEach(p => {
+    if (p.id === targetPlacedId) return;
+    const room = STATE.property.rooms.find(r => r.id === p.roomId);
+    if (!room) return;
+    if (rectsOverlap(
+      { x, y, w, d },
+      { x: p.x, y: p.y, w: room.center_w, d: room.center_d }
+    )) {
+      result.push(p.id);
+    }
+  });
+  return result;
+}
+
+// 配置済み部屋ごとに、現在重なっている相手のIDセットを返す
+function getCollisionMap() {
+  const map = {};
+  STATE.placed.forEach(p => {
+    const room = STATE.property.rooms.find(r => r.id === p.roomId);
+    if (!room) return;
+    const overlaps = findOverlappingRooms(p.id, p.x, p.y, room.center_w, room.center_d);
+    if (overlaps.length > 0) map[p.id] = overlaps;
+  });
+  return map;
+}
+
+// ===== home =====
+function renderHome() {
+  const list = $('property-list');
+  list.innerHTML = STATE.properties.map(p => `
+    <div class="property-card" onclick="openProperty('${p.id}')">
+      <div class="corner"></div>
+      <div class="name">${p.name}</div>
+      <div class="meta"><span class="mono">${p.created}</span><span class="mono">${p.rooms || 0} rooms</span></div>
+    </div>
+  `).join('');
+}
+
+function startNewProperty() {
+  STATE.property = { id: 'p_' + Date.now(), name: '物件 ' + new Date().toLocaleDateString('ja-JP'), created: new Date().toISOString().slice(0, 10), rooms: [] };
+  resetLayoutState();
+  renderRoomList();
+  showScreen('screen-roomlist');
+  setTimeout(() => startNewRoom(), 250);
+}
+
+function openProperty(id) {
+  if (id === 'sample') {
+    STATE.property = {
+      id: 'sample', name: 'サンプル物件 1K', created: '2026-04-27',
+      rooms: [
+        { id: 'r1', type: '洋室', inner_w: 2580, inner_d: 3580, center_w: 2730, center_d: 3640, grid_w: 3, grid_d: 4, tatami: 6 },
+        { id: 'r2', type: 'DK',   inner_w: 2580, inner_d: 2580, center_w: 2730, center_d: 2730, grid_w: 3, grid_d: 3, tatami: 4.5 },
+        { id: 'r3', type: '浴室', inner_w: 1500, inner_d: 1500, center_w: 1820, center_d: 1820, grid_w: 2, grid_d: 2, tatami: 2 },
+      ],
+    };
+  } else {
+    const p = STATE.properties.find(x => x.id === id);
+    if (!p) return;
+    STATE.property = p;
+  }
+  resetLayoutState();
+  renderRoomList();
+  showScreen('screen-roomlist');
+}
+
+function resetLayoutState() {
+  STATE.placed = [];
+  STATE.openings = [];
+  STATE.selection = null;
+  STATE.pendingRoom = null;
+  STATE.pendingOpeningType = null;
+  STATE.pendingOpeningRoom = null;
+  STATE.mode = 'place';
+}
+
+function goHome() { renderHome(); showScreen('screen-home'); }
+
+// ===== dialog =====
+function startNewRoom() {
+  STATE.dialog = { step: 1, roomType: null, width: null, depth: null };
+  showStep(1);
+  showScreen('screen-dialog');
+}
+
+function showStep(n) {
+  STATE.dialog.step = n;
+  document.querySelectorAll('.dialog-step').forEach(s => s.style.display = 'none');
+  $('step-' + n).style.display = 'block';
+  $('step-now').textContent = n;
+  $('progress-bar').style.width = (n * 25) + '%';
+  $('btn-next').textContent = n === 4 ? '登録する' : '次へ';
+  $('btn-back').textContent = n === 1 ? 'キャンセル' : '戻る';
+  if (n === 4) updatePreview();
+  if (n === 2) setTimeout(() => $('input-width').focus(), 100);
+  if (n === 3) setTimeout(() => $('input-depth').focus(), 100);
+}
+
+function selectRoomType(el, type) {
+  document.querySelectorAll('.room-type').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  STATE.dialog.roomType = type;
+  setTimeout(() => dialogNext(), 240);
+}
+
+function dialogNext() {
+  const s = STATE.dialog.step;
+  if (s === 1) { if (!STATE.dialog.roomType) { showToast('部屋の種類を選んでください'); return; } showStep(2); }
+  else if (s === 2) {
+    const v = parseInt($('input-width').value);
+    if (!v || v < 500 || v > 20000) { showToast('500〜20000mmで入力してください'); return; }
+    STATE.dialog.width = v; showStep(3);
+  } else if (s === 3) {
+    const v = parseInt($('input-depth').value);
+    if (!v || v < 500 || v > 20000) { showToast('500〜20000mmで入力してください'); return; }
+    STATE.dialog.depth = v; showStep(4);
+  } else if (s === 4) commitRoom();
+}
+
+function dialogBack() {
+  const s = STATE.dialog.step;
+  if (s === 1) showScreen('screen-roomlist');
+  else showStep(s - 1);
+}
+
+function snapToCenter(inner, wallThickness) {
+  const rawCenter = inner + wallThickness;
+  const gridCount = Math.max(1, Math.round(rawCenter / GRID));
+  return { center: gridCount * GRID, grid: gridCount };
+}
+
+function calcTatami(grid_w, grid_d) { return Math.round(((grid_w * grid_d) / 2) * 10) / 10; }
+
+function updatePreview() {
+  const { roomType, width, depth } = STATE.dialog;
+  const w = snapToCenter(width, WALL_THICKNESS);
+  const d = snapToCenter(depth, WALL_THICKNESS);
+  $('prev-type').textContent = roomType;
+  $('prev-inner').textContent = `${width} × ${depth}`;
+  $('prev-center').textContent = `${w.center} × ${d.center}`;
+  $('prev-grid').textContent = `${w.grid}尺 × ${d.grid}尺`;
+  $('prev-tatami').textContent = `約 ${calcTatami(w.grid, d.grid)} 帖`;
+  const ps = $('preview-shape');
+  const maxPx = 140, ratio = w.center / d.center;
+  let pxW, pxH;
+  if (ratio >= 1) { pxW = maxPx; pxH = maxPx / ratio; } else { pxH = maxPx; pxW = maxPx * ratio; }
+  ps.style.width = pxW + 'px';
+  ps.style.height = pxH + 'px';
+}
+
+function commitRoom() {
+  const { roomType, width, depth } = STATE.dialog;
+  const w = snapToCenter(width, WALL_THICKNESS);
+  const d = snapToCenter(depth, WALL_THICKNESS);
+  STATE.property.rooms.push({
+    id: 'r_' + Date.now(), type: roomType,
+    inner_w: width, inner_d: depth,
+    center_w: w.center, center_d: d.center,
+    grid_w: w.grid, grid_d: d.grid,
+    tatami: calcTatami(w.grid, d.grid),
+  });
+  showToast(`${roomType} を登録しました`);
+  renderRoomList();
+  showScreen('screen-roomlist');
+}
+
+function rotateDialog() {
+  // 幅と奥行きをスワップ
+  const tmp = STATE.dialog.width;
+  STATE.dialog.width = STATE.dialog.depth;
+  STATE.dialog.depth = tmp;
+  // アニメーション
+  const btn = document.querySelector('.rotate-btn');
+  btn.classList.add('rotating');
+  setTimeout(() => btn.classList.remove('rotating'), 400);
+  updatePreview();
+  showToast('90度回転しました');
+}
+
+// ===== room list =====
+function renderRoomList() {
+  $('property-name').textContent = STATE.property.name;
+  $('property-meta').textContent = `${STATE.property.created} · ${STATE.property.rooms.length} rooms registered`;
+  $('room-count').textContent = '/' + STATE.property.rooms.length;
+  const list = $('room-list-items');
+  if (STATE.property.rooms.length === 0) {
+    list.innerHTML = `<div class="empty"><div class="empty-mark">∅</div>まだ部屋が登録されていません<br>下のボタンから追加してください</div>`;
+    $('goto-layout-btn').disabled = true; $('goto-layout-btn').style.opacity = '0.4';
+    return;
+  }
+  list.innerHTML = STATE.property.rooms.map(r => `
+    <div class="room-item">
+      <div class="room-thumb"></div>
+      <div class="room-info"><div class="name">${r.type}</div><div class="dim mono">${r.center_w}×${r.center_d}mm</div></div>
+      <div class="room-tatami">${r.tatami}<small>帖</small></div>
+    </div>
+  `).join('');
+  $('goto-layout-btn').disabled = false;
+  $('goto-layout-btn').style.opacity = '1';
+}
+
+// ===== layout entry =====
+function goLayout() {
+  if (STATE.property.rooms.length === 0) { showToast('まず部屋を登録してください'); return; }
+  resetLayoutState();
+  switchMode('place');
+  showScreen('screen-layout');
+}
+
+function backToRoomList() { showScreen('screen-roomlist'); }
+
+// ===== mode switching =====
+function switchMode(mode) {
+  // 開口モードに進むには配置済み部屋が1つ以上必要
+  if (mode === 'opening' && STATE.placed.length === 0) {
+    showToast('まず配置モードで部屋を置いてください');
+    return;
+  }
+
+  STATE.mode = mode;
+  STATE.selection = null;
+  STATE.pendingRoom = null;
+  STATE.pendingOpeningType = null;
+  STATE.pendingOpeningRoom = null;
+
+  // タブ表示更新
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.mode-tab[data-mode="${mode}"]`).classList.add('active');
+
+  // モードヒント
+  const hintMap = { place: 'PLACE MODE', opening: 'OPENING MODE', preview: 'PREVIEW MODE' };
+  $('mode-hint').textContent = hintMap[mode];
+
+  // インストラクション
+  const msg = $('layout-msg');
+  msg.dataset.mode = mode;
+  if (mode === 'place') {
+    msg.textContent = STATE.placed.length === 0
+      ? '下の部屋カードをタップ → 最初の部屋を原点(0,0)に配置'
+      : '配置済みの部屋をタップ → 移動 / 別の部屋カード → 隣接配置';
+  } else if (mode === 'opening') {
+    msg.textContent = '下のドア・窓を選択 → 部屋をタップで配置 / 既存の開口部をタップ → 移動・削除';
+  } else {
+    msg.textContent = '完成イメージ。寸法・座標は表示されません';
+  }
+
+  hideCrossPanel();
+  renderToolbar();
+  renderCanvas();
+}
+
+function renderToolbar() {
+  const tb = $('layout-toolbar');
+  if (STATE.mode === 'place') {
+    const placedIds = new Set(STATE.placed.map(p => p.roomId));
+    const unplaced = STATE.property.rooms.filter(r => !placedIds.has(r.id));
+    if (unplaced.length === 0) {
+      tb.innerHTML = `<div class="toolbar-empty">— ALL ROOMS PLACED —</div>`;
+      return;
+    }
+    tb.innerHTML = unplaced.map(r => `
+      <div class="tool-chip" onclick="pickRoom('${r.id}')">
+        ${r.type}<span class="badge mono">${r.center_w}×${r.center_d}</span>
+      </div>
+    `).join('');
+  } else if (STATE.mode === 'opening') {
+    tb.innerHTML = Object.entries(OPENING_TYPES).map(([key, v]) => `
+      <div class="tool-chip opening-type ${STATE.pendingOpeningType === key ? 'active' : ''}" 
+           onclick="pickOpeningType('${key}')">
+        ${v.label}<span class="badge mono">${v.defaultWidth}</span>
+      </div>
+    `).join('');
+  } else {
+    tb.innerHTML = `<div class="toolbar-empty">— PREVIEW —</div>`;
+  }
+}
+
+// ===== Place mode =====
+function pickRoom(roomId) {
+  if (STATE.mode !== 'place') return;
+  const room = STATE.property.rooms.find(r => r.id === roomId);
+  if (!room) return;
+
+  if (STATE.placed.length === 0) {
+    STATE.placed.push({ id: 'p_' + Date.now(), roomId, x: 0, y: 0 });
+    renderToolbar();
+    renderCanvas();
+    showToast(`${room.type} を原点(0,0)に配置`);
+    $('layout-msg').textContent = '配置済みの部屋をタップ → 移動 / 別の部屋カード → 隣接配置';
+  } else {
+    STATE.pendingRoom = roomId;
+    STATE.selection = null;
+    $('layout-msg').textContent = `${room.type} の接続先となる「辺」をタップ`;
+    hideCrossPanel();
+    renderCanvas();
+  }
+}
+
+function placeNextOn(targetPid, edge) {
+  const target = STATE.placed.find(p => p.id === targetPid);
+  const targetRoom = STATE.property.rooms.find(r => r.id === target.roomId);
+  const newRoom = STATE.property.rooms.find(r => r.id === STATE.pendingRoom);
+  if (!target || !targetRoom || !newRoom) return;
+
+  let nx, ny;
+  switch (edge) {
+    case 'E': nx = target.x + targetRoom.center_w; ny = target.y; break;
+    case 'W': nx = target.x - newRoom.center_w; ny = target.y; break;
+    case 'N': nx = target.x; ny = target.y + targetRoom.center_d; break;
+    case 'S': nx = target.x; ny = target.y - newRoom.center_d; break;
+  }
+
+  // 配置前に重なりチェック
+  const overlaps = findOverlappingRooms(null, nx, ny, newRoom.center_w, newRoom.center_d);
+
+  STATE.placed.push({ id: 'p_' + Date.now(), roomId: STATE.pendingRoom, x: nx, y: ny });
+  STATE.pendingRoom = null;
+  renderToolbar();
+  renderCanvas();
+
+  if (overlaps.length > 0) {
+    showToast(`⚠ ${newRoom.type} が他の部屋と重なっています`);
+  } else {
+    showToast(`${newRoom.type} を配置`);
+  }
+  $('layout-msg').textContent = '配置済みの部屋をタップ → 移動 / 別の部屋カード → 隣接配置';
+}
+
+// ===== Opening mode =====
+function pickOpeningType(type) {
+  if (STATE.mode !== 'opening') return;
+  if (STATE.pendingOpeningType === type) {
+    // 同じタイプを再タップ → キャンセル
+    STATE.pendingOpeningType = null;
+    STATE.pendingOpeningRoom = null;
+    $('layout-msg').textContent = '下のドア・窓を選択 → 部屋をタップで配置 / 既存の開口部をタップ → 移動・削除';
+  } else {
+    STATE.pendingOpeningType = type;
+    STATE.pendingOpeningRoom = null;
+    STATE.selection = null;
+    hideCrossPanel();
+    $('layout-msg').textContent = `${OPENING_TYPES[type].label}を配置する部屋をタップ`;
+  }
+  renderToolbar();
+  renderCanvas();
+}
+
+function selectRoomForOpening(roomPlacedId) {
+  if (!STATE.pendingOpeningType) return;
+  STATE.pendingOpeningRoom = roomPlacedId;
+  const placed = STATE.placed.find(x => x.id === roomPlacedId);
+  const room = STATE.property.rooms.find(x => x.id === placed.roomId);
+  $('layout-msg').textContent = `${room.type} のどの辺に配置しますか? — 青い辺をタップ(部屋を再タップでキャンセル)`;
+  renderCanvas();
+}
+
+function cancelRoomSelection() {
+  STATE.pendingOpeningRoom = null;
+  $('layout-msg').textContent = `${OPENING_TYPES[STATE.pendingOpeningType].label}を配置する部屋をタップ`;
+  renderCanvas();
+}
+
+function placeOpeningOnEdge(side) {
+  if (!STATE.pendingOpeningType || !STATE.pendingOpeningRoom) return;
+  const placed = STATE.placed.find(x => x.id === STATE.pendingOpeningRoom);
+  const room = STATE.property.rooms.find(x => x.id === placed.roomId);
+  const def = OPENING_TYPES[STATE.pendingOpeningType];
+  const w = def.defaultWidth;
+  const wallLen = (side === 'N' || side === 'S') ? room.center_w : room.center_d;
+  // 中央配置(壁の中央に配置)、壁が短い場合は幅も縮小
+  const finalWidth = Math.min(w, wallLen);
+  const offset = Math.max(0, (wallLen - finalWidth) / 2);
+
+  const opId = 'op_' + Date.now();
+  STATE.openings.push({
+    id: opId,
+    roomPlacedId: placed.id,
+    side,
+    offset,
+    width: finalWidth,
+    type: STATE.pendingOpeningType,
+  });
+  STATE.pendingOpeningType = null;
+  STATE.pendingOpeningRoom = null;
+  STATE.selection = { type: 'opening', id: opId };
+  showToast(`${def.label}を${sideLabel(side)}壁に追加 → 十字キーで微調整`);
+  $('layout-msg').textContent = '十字キーで位置調整 / 完了で確定 / 別タイプを選んで追加可';
+  renderToolbar();
+  renderCanvas();
+  showCrossPanel();
+}
+
+function sideLabel(side) {
+  return { N: '北', S: '南', E: '東', W: '西' }[side] || side;
+}
+
+// ===== Render canvas =====
+function renderCanvas() {
+  const svg = $('floor-canvas');
+  const t = getViewTransform();
+  let html = '';
+
+  // 衝突マップを計算
+  const collisions = getCollisionMap();
+  const collisionIds = new Set(Object.keys(collisions));
+  // 警告バナー
+  const banner = $('collision-banner');
+  if (collisionIds.size > 0) {
+    banner.textContent = `⚠ ${collisionIds.size}個の部屋が重なっています`;
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+
+  // 原点マーカー(配置/開口モードのみ表示、preview非表示)
+  if (STATE.placed.length > 0 && STATE.mode !== 'preview') {
+    const origin = w2s(0, 0, t);
+    html += `<g>
+      <circle cx="${origin.x}" cy="${origin.y}" r="4" class="origin-mark" />
+      <line x1="${origin.x - 8}" y1="${origin.y}" x2="${origin.x + 8}" y2="${origin.y}" class="origin-mark" />
+      <line x1="${origin.x}" y1="${origin.y - 8}" x2="${origin.x}" y2="${origin.y + 8}" class="origin-mark" />
+      <text x="${origin.x + 10}" y="${origin.y + 14}" class="origin-text">(0, 0)</text>
+    </g>`;
+  }
+
+  // 配置済み部屋
+  STATE.placed.forEach(p => {
+    const room = STATE.property.rooms.find(r => r.id === p.roomId);
+    if (!room) return;
+    const tl = w2s(p.x, p.y + room.center_d, t);
+    const br = w2s(p.x + room.center_w, p.y, t);
+    const x = tl.x, y = tl.y, w = br.x - tl.x, h = br.y - tl.y;
+
+    // モード別に部屋の振る舞いを変更
+    let cls = 'room-rect', click = '';
+    const isCollision = collisionIds.has(p.id);
+
+    if (STATE.mode === 'place') {
+      const isSel = STATE.selection && STATE.selection.type === 'room' && STATE.selection.id === p.id;
+      if (isSel) cls += ' selected';
+      else if (isCollision) cls += ' collision';
+      click = `onclick="selectPlaced('${p.id}')"`;
+    } else if (STATE.mode === 'opening') {
+      cls += ' opening-target locked';
+      if (isCollision) cls += ' collision';
+      if (STATE.pendingOpeningType) {
+        cls += ' target-active';
+        if (STATE.pendingOpeningRoom === p.id) {
+          // 既に選択済みの部屋 → 再タップでキャンセル
+          click = `onclick="cancelRoomSelection()"`;
+        } else if (!STATE.pendingOpeningRoom) {
+          click = `onclick="selectRoomForOpening('${p.id}')"`;
+        }
+      }
+    } else {
+      cls += ' locked';
+      if (isCollision) cls += ' collision';
+    }
+
+    html += `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${h}" ${click}/>`;
+
+    // 衝突警告アイコン
+    if (isCollision && STATE.mode !== 'preview') {
+      html += `<text class="collision-icon" x="${x + w - 12}" y="${y + 16}">⚠</text>`;
+    }
+
+    // ラベル(preview時は寸法・座標を非表示)
+    if (STATE.mode !== 'preview') {
+      html += `<text class="dim-text" x="${x + w/2}" y="${y - 4}" text-anchor="middle">${room.center_w}</text>`;
+      html += `<text class="dim-text" x="${x - 4}" y="${y + h/2}" text-anchor="end" dy="3">${room.center_d}</text>`;
+    }
+    html += `<text class="room-label" x="${x + w/2}" y="${y + h/2 - 2}">${room.type}</text>`;
+    if (STATE.mode === 'preview') {
+      html += `<text class="room-label-en" x="${x + w/2}" y="${y + h/2 + 10}">${room.tatami}帖</text>`;
+    } else {
+      html += `<text class="room-label-en" x="${x + w/2}" y="${y + h/2 + 10}">${room.tatami}帖 · (${p.x},${p.y})</text>`;
+    }
+
+    // 接続辺(配置モードで pendingRoom 時のみ)
+    if (STATE.mode === 'place' && STATE.pendingRoom) {
+      const edges = [
+        { id: 'N', x1: x, y1: y, x2: x+w, y2: y },
+        { id: 'S', x1: x, y1: y+h, x2: x+w, y2: y+h },
+        { id: 'W', x1: x, y1: y, x2: x, y2: y+h },
+        { id: 'E', x1: x+w, y1: y, x2: x+w, y2: y+h },
+      ];
+      edges.forEach(e => {
+        html += `<line class="edge-highlight" x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" 
+                 onclick="placeNextOn('${p.id}', '${e.id}')" stroke-opacity="0.4"/>`;
+      });
+    }
+
+    // 開口モードで辺選択フェーズの場合、選択された部屋の辺をハイライト
+    if (STATE.mode === 'opening' && STATE.pendingOpeningType && STATE.pendingOpeningRoom === p.id) {
+      const edges = [
+        { id: 'N', x1: x, y1: y, x2: x+w, y2: y },
+        { id: 'S', x1: x, y1: y+h, x2: x+w, y2: y+h },
+        { id: 'W', x1: x, y1: y, x2: x, y2: y+h },
+        { id: 'E', x1: x+w, y1: y, x2: x+w, y2: y+h },
+      ];
+      edges.forEach(e => {
+        // 透明な太い線(当たり判定を広げる)
+        html += `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" 
+                 stroke="transparent" stroke-width="20" style="cursor:pointer;"
+                 onclick="placeOpeningOnEdge('${e.id}')"/>`;
+        // 見た目の青いハイライト線
+        html += `<line class="edge-highlight-blue" x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" 
+                 onclick="placeOpeningOnEdge('${e.id}')"/>`;
+        // 辺ラベル
+        const mx = (e.x1 + e.x2) / 2;
+        const my = (e.y1 + e.y2) / 2;
+        let lx = mx, ly = my;
+        if (e.id === 'N') ly -= 10;
+        if (e.id === 'S') ly += 16;
+        if (e.id === 'W') lx -= 12;
+        if (e.id === 'E') lx += 12;
+        html += `<text class="edge-label" x="${lx}" y="${ly}" text-anchor="middle">${sideLabel(e.id)}</text>`;
+      });
+    }
+  });
+
+  // 開口部(全モードで描画、ただし操作可は opening モードのみ)
+  STATE.openings.forEach(op => {
+    html += renderOpeningHTML(op, t);
+  });
+
+  if (STATE.placed.length === 0) {
+    html += `<text x="240" y="270" text-anchor="middle" fill="#8a8a85" font-size="12" font-family="Space Mono">↓ 下から最初の部屋を選択</text>`;
+  }
+
+  svg.innerHTML = html;
+}
+
+function renderOpeningHTML(op, t) {
+  const placed = STATE.placed.find(p => p.id === op.roomPlacedId);
+  if (!placed) return '';
+  const room = STATE.property.rooms.find(r => r.id === placed.roomId);
+  if (!room) return '';
+
+  let x1, y1, x2, y2;
+  switch (op.side) {
+    case 'N': x1 = placed.x + op.offset; y1 = placed.y + room.center_d; x2 = x1 + op.width; y2 = y1; break;
+    case 'S': x1 = placed.x + op.offset; y1 = placed.y; x2 = x1 + op.width; y2 = y1; break;
+    case 'E': x1 = placed.x + room.center_w; y1 = placed.y + op.offset; x2 = x1; y2 = y1 + op.width; break;
+    case 'W': x1 = placed.x; y1 = placed.y + op.offset; x2 = x1; y2 = y1 + op.width; break;
+  }
+  const p1 = w2s(x1, y1, t), p2 = w2s(x2, y2, t);
+  const isSel = STATE.selection && STATE.selection.type === 'opening' && STATE.selection.id === op.id;
+  const operable = STATE.mode === 'opening';
+
+  let html = '<g>';
+  const bgPad = 4;
+  if (op.side === 'N' || op.side === 'S') {
+    html += `<rect class="opening-bg" x="${Math.min(p1.x, p2.x)}" y="${p1.y - bgPad}" width="${Math.abs(p2.x - p1.x)}" height="${bgPad * 2}" />`;
+  } else {
+    html += `<rect class="opening-bg" x="${p1.x - bgPad}" y="${Math.min(p1.y, p2.y)}" width="${bgPad * 2}" height="${Math.abs(p2.y - p1.y)}" />`;
+  }
+
+  if (op.type === 'window' || op.type === 'window-large') {
+    html += `<line class="opening-window-line" x1="${p1.x}" y1="${p1.y - 1}" x2="${p2.x}" y2="${p2.y - 1}" />`;
+    html += `<line class="opening-window-line" x1="${p1.x}" y1="${p1.y + 1}" x2="${p2.x}" y2="${p2.y + 1}" />`;
+    if (op.side === 'E' || op.side === 'W') {
+      html += `<line class="opening-window-line" x1="${p1.x - 1}" y1="${p1.y}" x2="${p2.x - 1}" y2="${p2.y}" />`;
+      html += `<line class="opening-window-line" x1="${p1.x + 1}" y1="${p1.y}" x2="${p2.x + 1}" y2="${p2.y}" />`;
+    }
+  } else if (op.type === 'door-single') {
+    if (op.side === 'N' || op.side === 'S') {
+      const r = Math.abs(p2.x - p1.x);
+      const dir = op.side === 'N' ? -1 : 1;
+      html += `<path class="opening-door-arc" d="M ${p1.x} ${p1.y} A ${r} ${r} 0 0 ${op.side === 'N' ? 1 : 0} ${p1.x + r} ${p1.y + r * dir}" />`;
+      html += `<line class="opening-door-leaf" x1="${p1.x}" y1="${p1.y}" x2="${p1.x}" y2="${p1.y + r * dir}" />`;
+    } else {
+      const r = Math.abs(p2.y - p1.y);
+      const dir = op.side === 'W' ? 1 : -1;
+      html += `<path class="opening-door-arc" d="M ${p1.x} ${p1.y} A ${r} ${r} 0 0 ${op.side === 'W' ? 1 : 0} ${p1.x + r * dir} ${p1.y + r}" />`;
+      html += `<line class="opening-door-leaf" x1="${p1.x}" y1="${p1.y}" x2="${p1.x + r * dir}" y2="${p1.y}" />`;
+    }
+  } else if (op.type === 'door-double') {
+    // 両開: 中央から両側へ弧
+    if (op.side === 'N' || op.side === 'S') {
+      const half = Math.abs(p2.x - p1.x) / 2;
+      const dir = op.side === 'N' ? -1 : 1;
+      html += `<path class="opening-door-arc" d="M ${p1.x} ${p1.y} A ${half} ${half} 0 0 ${op.side === 'N' ? 1 : 0} ${p1.x + half} ${p1.y + half * dir}" />`;
+      html += `<line class="opening-door-leaf" x1="${p1.x}" y1="${p1.y}" x2="${p1.x}" y2="${p1.y + half * dir}" />`;
+      html += `<path class="opening-door-arc" d="M ${p2.x} ${p2.y} A ${half} ${half} 0 0 ${op.side === 'N' ? 0 : 1} ${p2.x - half} ${p2.y + half * dir}" />`;
+      html += `<line class="opening-door-leaf" x1="${p2.x}" y1="${p2.y}" x2="${p2.x}" y2="${p2.y + half * dir}" />`;
+    } else {
+      const half = Math.abs(p2.y - p1.y) / 2;
+      const dir = op.side === 'W' ? 1 : -1;
+      html += `<path class="opening-door-arc" d="M ${p1.x} ${p1.y} A ${half} ${half} 0 0 ${op.side === 'W' ? 1 : 0} ${p1.x + half * dir} ${p1.y + half}" />`;
+      html += `<line class="opening-door-leaf" x1="${p1.x}" y1="${p1.y}" x2="${p1.x + half * dir}" y2="${p1.y}" />`;
+      html += `<path class="opening-door-arc" d="M ${p2.x} ${p2.y} A ${half} ${half} 0 0 ${op.side === 'W' ? 0 : 1} ${p2.x + half * dir} ${p2.y - half}" />`;
+      html += `<line class="opening-door-leaf" x1="${p2.x}" y1="${p2.y}" x2="${p2.x + half * dir}" y2="${p2.y}" />`;
+    }
+  } else if (op.type === 'door-slide') {
+    if (op.side === 'N' || op.side === 'S') {
+      const mid = (p1.x + p2.x) / 2;
+      html += `<line class="opening-window-line" x1="${p1.x}" y1="${p1.y - 1}" x2="${mid}" y2="${p1.y - 1}" />`;
+      html += `<line class="opening-window-line" x1="${mid}" y1="${p1.y + 1}" x2="${p2.x}" y2="${p2.y + 1}" />`;
+    } else {
+      const mid = (p1.y + p2.y) / 2;
+      html += `<line class="opening-window-line" x1="${p1.x - 1}" y1="${p1.y}" x2="${p1.x - 1}" y2="${mid}" />`;
+      html += `<line class="opening-window-line" x1="${p1.x + 1}" y1="${mid}" x2="${p2.x + 1}" y2="${p2.y}" />`;
+    }
+  }
+  // 'opening' は背景のみ
+
+  // タップハンドル(opening モードのみ)
+  if (operable) {
+    const hs = 10;
+    let hx, hy, hw, hh;
+    if (op.side === 'N' || op.side === 'S') {
+      hx = Math.min(p1.x, p2.x) - 2; hy = p1.y - hs;
+      hw = Math.abs(p2.x - p1.x) + 4; hh = hs * 2;
+    } else {
+      hx = p1.x - hs; hy = Math.min(p1.y, p2.y) - 2;
+      hw = hs * 2; hh = Math.abs(p2.y - p1.y) + 4;
+    }
+    html += `<rect class="opening-handle ${isSel ? 'selected' : ''}" x="${hx}" y="${hy}" width="${hw}" height="${hh}" onclick="selectOpening('${op.id}')" />`;
+  }
+
+  html += '</g>';
+  return html;
+}
+
+// ===== selection / move =====
+function selectPlaced(pid) {
+  if (STATE.mode !== 'place') return;
+  if (STATE.pendingRoom) return;
+  STATE.selection = { type: 'room', id: pid };
+  showCrossPanel();
+  renderCanvas();
+}
+
+function selectOpening(oid) {
+  if (STATE.mode !== 'opening') return;
+  STATE.selection = { type: 'opening', id: oid };
+  showCrossPanel();
+  renderCanvas();
+}
+
+function deselectAll() {
+  STATE.selection = null;
+  hideCrossPanel();
+  renderCanvas();
+}
+
+function showCrossPanel() {
+  if (!STATE.selection) return;
+  const panel = $('cross-panel');
+  panel.classList.add('show');
+  panel.classList.toggle('opening-mode', STATE.mode === 'opening');
+
+  const info = $('selection-info');
+  info.classList.add('show');
+  info.classList.toggle('opening-mode', STATE.mode === 'opening');
+
+  if (STATE.selection.type === 'room') {
+    const p = STATE.placed.find(x => x.id === STATE.selection.id);
+    const r = STATE.property.rooms.find(x => x.id === p.roomId);
+    $('cross-label').textContent = `MOVE / ${r.type}`;
+    info.textContent = `${r.type} @ (${p.x}, ${p.y})`;
+    $('rotate-room-btn').style.display = 'block';
+  } else {
+    const op = STATE.openings.find(x => x.id === STATE.selection.id);
+    $('cross-label').textContent = `MOVE / ${OPENING_TYPES[op.type].label}`;
+    info.textContent = `${OPENING_TYPES[op.type].label} · ${op.side} · offset:${op.offset} w:${op.width}`;
+    $('rotate-room-btn').style.display = 'none';
+  }
+}
+
+function rotateSelectedRoom() {
+  if (!STATE.selection || STATE.selection.type !== 'room') return;
+  const p = STATE.placed.find(x => x.id === STATE.selection.id);
+  if (!p) return;
+  const room = STATE.property.rooms.find(x => x.id === p.roomId);
+  if (!room) return;
+  // 部屋寸法をスワップ(部屋データを直接編集)
+  [room.center_w, room.center_d] = [room.center_d, room.center_w];
+  [room.inner_w, room.inner_d] = [room.inner_d, room.inner_w];
+  [room.grid_w, room.grid_d] = [room.grid_d, room.grid_w];
+  // 紐づく開口部のside変換: N↔E, S↔W (+90度回転を意味的に)
+  STATE.openings.forEach(op => {
+    if (op.roomPlacedId !== p.id) return;
+    // 90度回転: N→E, E→S, S→W, W→N
+    const rotMap = { N: 'E', E: 'S', S: 'W', W: 'N' };
+    op.side = rotMap[op.side] || op.side;
+    // offsetは新しい辺の長さでクランプ
+    const wallLen = (op.side === 'N' || op.side === 'S') ? room.center_w : room.center_d;
+    op.offset = Math.max(0, Math.min(wallLen - op.width, op.offset));
+  });
+  showCrossPanel();
+  renderCanvas();
+  showToast(`${room.type} を90度回転`);
+}
+
+function hideCrossPanel() {
+  $('cross-panel').classList.remove('show');
+  $('selection-info').classList.remove('show');
+}
+
+function setStep(mm) {
+  STATE.moveStep = mm;
+  document.querySelectorAll('.step-toggle button').forEach(b => b.classList.toggle('active', parseInt(b.dataset.step) === mm));
+  $('step-display').textContent = mm;
+}
+
+function moveSelected(dx, dy) {
+  if (!STATE.selection) return;
+  const step = STATE.moveStep;
+  if (STATE.selection.type === 'room') {
+    const p = STATE.placed.find(x => x.id === STATE.selection.id);
+    if (!p) return;
+    p.x += dx * step; p.y += dy * step;
+    showToast(`(${p.x}, ${p.y})`);
+  } else {
+    const op = STATE.openings.find(x => x.id === STATE.selection.id);
+    if (!op) return;
+    if (op.side === 'N' || op.side === 'S') op.offset += dx * step;
+    else op.offset += dy * step;
+    const placed = STATE.placed.find(x => x.id === op.roomPlacedId);
+    const room = STATE.property.rooms.find(x => x.id === placed.roomId);
+    const wallLen = (op.side === 'N' || op.side === 'S') ? room.center_w : room.center_d;
+    op.offset = Math.max(0, Math.min(wallLen - op.width, op.offset));
+    showToast(`offset: ${op.offset}mm`);
+  }
+  showCrossPanel();
+  renderCanvas();
+}
+
+function deleteSelected() {
+  if (!STATE.selection) return;
+  if (STATE.selection.type === 'room') {
+    const p = STATE.placed.find(x => x.id === STATE.selection.id);
+    const r = STATE.property.rooms.find(x => x.id === p.roomId);
+    if (!confirm(`${r.type} の配置を解除しますか?`)) return;
+    STATE.openings = STATE.openings.filter(o => o.roomPlacedId !== STATE.selection.id);
+    STATE.placed = STATE.placed.filter(x => x.id !== STATE.selection.id);
+    showToast('配置を解除');
+  } else {
+    STATE.openings = STATE.openings.filter(x => x.id !== STATE.selection.id);
+    showToast('開口部を削除');
+  }
+  STATE.selection = null;
+  hideCrossPanel();
+  renderToolbar();
+  renderCanvas();
+}
+
+// ===== init =====
+renderHome();
+</script>
+
+</body>
+</html>
