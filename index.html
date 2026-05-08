@@ -400,7 +400,7 @@
 <div class="app">
   <header>
     <div><span class="brand">out<span class="accent">l</span>ay</span></div>
-    <span class="brand-tag mono">v0.5 · debug</span>
+    <span class="brand-tag mono">v0.6 · prototype</span>
   </header>
 
   <!-- Home -->
@@ -577,8 +577,7 @@ const STATE = {
 
   // 開口モード関連
   openings: [],               // [{ id, roomPlacedId, side, offset, width, type }]
-  pendingOpeningType: null,   // 追加待ちの開口部タイプ
-  pendingOpeningRoom: null,   // 開口部追加先として選択された部屋ID(辺選択フェーズ)
+  editingOpening: null,       // 編集中の開口部 { roomPlacedId, side, offset, width, typeIndex }
   
   // 共通
   mode: 'place',              // 'place' | 'opening' | 'preview'
@@ -588,6 +587,9 @@ const STATE = {
 
 const GRID = 910;
 const WALL_THICKNESS = 105;
+
+// 3循環するメインタイプ(ドア / 窓 / 開口)
+const MAIN_OPENING_TYPES = ['door-single', 'window', 'opening'];
 
 const OPENING_TYPES = {
   'door-single':  { label: '片開ドア', defaultWidth: 780 },
@@ -715,8 +717,7 @@ function resetLayoutState() {
   STATE.openings = [];
   STATE.selection = null;
   STATE.pendingRoom = null;
-  STATE.pendingOpeningType = null;
-  STATE.pendingOpeningRoom = null;
+  STATE.editingOpening = null;
   STATE.mode = 'place';
 }
 
@@ -862,12 +863,16 @@ function switchMode(mode) {
     showToast('まず配置モードで部屋を置いてください');
     return;
   }
+  
+  // 開口モードを離れる時は編集中の開口部を確定
+  if (STATE.mode === 'opening' && mode !== 'opening' && STATE.editingOpening) {
+    commitEditingOpening();
+  }
 
   STATE.mode = mode;
   STATE.selection = null;
   STATE.pendingRoom = null;
-  STATE.pendingOpeningType = null;
-  STATE.pendingOpeningRoom = null;
+  STATE.editingOpening = null;
 
   // タブ表示更新
   document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
@@ -885,7 +890,7 @@ function switchMode(mode) {
       ? '下の部屋カードをタップ → 最初の部屋を原点(0,0)に配置'
       : '配置済みの部屋をタップ → 移動 / 別の部屋カード → 隣接配置';
   } else if (mode === 'opening') {
-    msg.textContent = '下のドア・窓を選択 → 部屋をタップで配置 / 既存の開口部をタップ → 移動・削除';
+    msg.textContent = '壁をタップ → 種類選択 / 配置済みをタップ → 編集';
   } else {
     msg.textContent = '完成イメージ。寸法・座標は表示されません';
   }
@@ -910,12 +915,7 @@ function renderToolbar() {
       </div>
     `).join('');
   } else if (STATE.mode === 'opening') {
-    tb.innerHTML = Object.entries(OPENING_TYPES).map(([key, v]) => `
-      <div class="tool-chip opening-type ${STATE.pendingOpeningType === key ? 'active' : ''}" 
-           onclick="pickOpeningType('${key}')">
-        ${v.label}<span class="badge mono">${v.defaultWidth}</span>
-      </div>
-    `).join('');
+    tb.innerHTML = `<div class="toolbar-empty">— 壁をタップ → 種類切替(ドア / 窓 / 開口) · 部屋の中タップで確定 —</div>`;
   } else {
     tb.innerHTML = `<div class="toolbar-empty">— PREVIEW —</div>`;
   }
@@ -973,84 +973,115 @@ function placeNextOn(targetPid, edge) {
 }
 
 // ===== Opening mode =====
-function pickOpeningType(type) {
-  console.log('[DEBUG] pickOpeningType called with type:', type);
-  if (STATE.mode !== 'opening') {
-    console.log('[DEBUG] STATE.mode is not opening, returning. mode=', STATE.mode);
-    return;
-  }
-  if (STATE.pendingOpeningType === type) {
-    // 同じタイプを再タップ → キャンセル
-    STATE.pendingOpeningType = null;
-    STATE.pendingOpeningRoom = null;
-    $('layout-msg').textContent = '下のドア・窓を選択 → 部屋をタップで配置 / 既存の開口部をタップ → 移動・削除';
-    console.log('[DEBUG] Same type re-tapped, canceled');
-  } else {
-    STATE.pendingOpeningType = type;
-    STATE.pendingOpeningRoom = null;
-    STATE.selection = null;
-    hideCrossPanel();
-    $('layout-msg').textContent = `${OPENING_TYPES[type].label}を配置する部屋をタップ`;
-    console.log('[DEBUG] pendingOpeningType set to:', STATE.pendingOpeningType);
-  }
-  renderToolbar();
-  renderCanvas();
-}
 
-function selectRoomForOpening(roomPlacedId) {
-  console.log('[DEBUG] selectRoomForOpening called. roomPlacedId:', roomPlacedId, 'pendingType:', STATE.pendingOpeningType);
-  if (!STATE.pendingOpeningType) {
-    console.log('[DEBUG] pendingOpeningType is null, returning');
+// 壁(辺)タップ: 編集中なら循環、新規なら開始、既存があれば編集
+function tapWall(roomPlacedId, side) {
+  if (STATE.mode !== 'opening') return;
+  
+  const editing = STATE.editingOpening;
+  
+  if (editing && editing.roomPlacedId === roomPlacedId && editing.side === side) {
+    // 同じ壁を再タップ → タイプ循環
+    editing.typeIndex = (editing.typeIndex + 1) % MAIN_OPENING_TYPES.length;
+    renderCanvas();
     return;
   }
-  STATE.pendingOpeningRoom = roomPlacedId;
+  
+  // 別の壁(または編集なし) → 既存の編集を確定して新規開始
+  if (editing) {
+    commitEditingOpening();
+  }
+  
+  // 既にこの辺に開口部があれば、それを編集モードに引き上げる
+  const existing = STATE.openings.find(op => 
+    op.roomPlacedId === roomPlacedId && op.side === side
+  );
+  
   const placed = STATE.placed.find(x => x.id === roomPlacedId);
+  if (!placed) return;
   const room = STATE.property.rooms.find(x => x.id === placed.roomId);
-  $('layout-msg').textContent = `${room.type} のどの辺に配置しますか? — 青い辺をタップ(部屋を再タップでキャンセル)`;
-  console.log('[DEBUG] pendingOpeningRoom set, type:', STATE.pendingOpeningType, 'room:', room.type);
-  renderCanvas();
-}
-
-function cancelRoomSelection() {
-  STATE.pendingOpeningRoom = null;
-  $('layout-msg').textContent = `${OPENING_TYPES[STATE.pendingOpeningType].label}を配置する部屋をタップ`;
-  renderCanvas();
-}
-
-function placeOpeningOnEdge(side) {
-  console.log('[DEBUG] placeOpeningOnEdge called. side:', side, 'pendingType:', STATE.pendingOpeningType, 'pendingRoom:', STATE.pendingOpeningRoom);
-  if (!STATE.pendingOpeningType || !STATE.pendingOpeningRoom) {
-    console.log('[DEBUG] guard returned. pendingType=', STATE.pendingOpeningType, 'pendingRoom=', STATE.pendingOpeningRoom);
+  if (!room) return;
+  
+  if (existing) {
+    // 既存を編集状態に引き上げる(配列から取り出して editing に)
+    const idx = STATE.openings.indexOf(existing);
+    STATE.openings.splice(idx, 1);
+    
+    // タイプから typeIndex を逆引き(細分化されてる場合は近いメインタイプに)
+    let typeIndex = MAIN_OPENING_TYPES.indexOf(existing.type);
+    if (typeIndex < 0) {
+      // door-double / door-slide → door-single にマップ
+      // window-large → window にマップ
+      if (existing.type.startsWith('door')) typeIndex = 0;
+      else if (existing.type.startsWith('window')) typeIndex = 1;
+      else typeIndex = 2;
+    }
+    
+    STATE.editingOpening = {
+      roomPlacedId,
+      side,
+      offset: existing.offset,
+      width: existing.width,
+      typeIndex,
+    };
+    $('layout-msg').textContent = '壁を再タップで種類切替 / 別の場所をタップで確定';
+    renderCanvas();
     return;
   }
-  const placed = STATE.placed.find(x => x.id === STATE.pendingOpeningRoom);
-  const room = STATE.property.rooms.find(x => x.id === placed.roomId);
-  const def = OPENING_TYPES[STATE.pendingOpeningType];
-  const w = def.defaultWidth;
+  
+  // 新しい壁の編集を開始
   const wallLen = (side === 'N' || side === 'S') ? room.center_w : room.center_d;
-  // 中央配置(壁の中央に配置)、壁が短い場合は幅も縮小
-  const finalWidth = Math.min(w, wallLen);
+  const initialType = MAIN_OPENING_TYPES[0]; // ドアからスタート
+  const defaultWidth = OPENING_TYPES[initialType].defaultWidth;
+  const finalWidth = Math.min(defaultWidth, wallLen);
   const offset = Math.max(0, (wallLen - finalWidth) / 2);
-  console.log('[DEBUG] placement values: side=', side, 'wallLen=', wallLen, 'finalWidth=', finalWidth, 'offset=', offset);
-
-  const opId = 'op_' + Date.now();
-  STATE.openings.push({
-    id: opId,
-    roomPlacedId: placed.id,
+  
+  STATE.editingOpening = {
+    roomPlacedId,
     side,
     offset,
     width: finalWidth,
-    type: STATE.pendingOpeningType,
-  });
-  console.log('[DEBUG] opening pushed. openings now:', STATE.openings.length, 'last:', STATE.openings[STATE.openings.length - 1]);
-  STATE.pendingOpeningType = null;
-  STATE.pendingOpeningRoom = null;
-  STATE.selection = { type: 'opening', id: opId };
-  showToast(`${def.label}を${sideLabel(side)}壁に追加 → 十字キーで微調整`);
-  $('layout-msg').textContent = '十字キーで位置調整 / 完了で確定 / 別タイプを選んで追加可';
-  renderToolbar();
+    typeIndex: 0,
+  };
+  
+  $('layout-msg').textContent = '壁を再タップで種類切替 / 別の場所をタップで確定';
   renderCanvas();
-  showCrossPanel();
+}
+
+// 編集中の開口部を確定して openings に追加
+function commitEditingOpening() {
+  if (!STATE.editingOpening) return;
+  const e = STATE.editingOpening;
+  const opId = 'op_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  const type = MAIN_OPENING_TYPES[e.typeIndex];
+  
+  // 壁長に応じて幅を再計算
+  const placed = STATE.placed.find(x => x.id === e.roomPlacedId);
+  const room = STATE.property.rooms.find(x => x.id === placed.roomId);
+  const wallLen = (e.side === 'N' || e.side === 'S') ? room.center_w : room.center_d;
+  const defaultWidth = OPENING_TYPES[type].defaultWidth;
+  const finalWidth = Math.min(defaultWidth, wallLen);
+  const finalOffset = Math.max(0, (wallLen - finalWidth) / 2);
+  
+  STATE.openings.push({
+    id: opId,
+    roomPlacedId: e.roomPlacedId,
+    side: e.side,
+    offset: finalOffset,
+    width: finalWidth,
+    type,
+  });
+  
+  STATE.editingOpening = null;
+  $('layout-msg').textContent = '壁をタップ → 種類選択 / 配置済みをタップ → 編集';
+}
+
+// 編集をキャンセル(部屋の中・余白タップで呼ばれる)
+function cancelEditingOpening() {
+  if (STATE.editingOpening) {
+    commitEditingOpening();
+    renderCanvas();
+  }
 }
 
 function sideLabel(side) {
@@ -1104,17 +1135,10 @@ function renderCanvas() {
       else if (isCollision) cls += ' collision';
       click = `onclick="selectPlaced('${p.id}')"`;
     } else if (STATE.mode === 'opening') {
-      cls += ' opening-target locked';
+      cls += ' opening-target';
       if (isCollision) cls += ' collision';
-      if (STATE.pendingOpeningType) {
-        cls += ' target-active';
-        if (STATE.pendingOpeningRoom === p.id) {
-          // 既に選択済みの部屋 → 再タップでキャンセル
-          click = `onclick="cancelRoomSelection()"`;
-        } else if (!STATE.pendingOpeningRoom) {
-          click = `onclick="selectRoomForOpening('${p.id}')"`;
-        }
-      }
+      // 部屋の中身タップ → 編集中なら確定
+      click = `onclick="cancelEditingOpening()"`;
     } else {
       cls += ' locked';
       if (isCollision) cls += ' collision';
@@ -1153,31 +1177,26 @@ function renderCanvas() {
       });
     }
 
-    // 開口モードで辺選択フェーズの場合、選択された部屋の辺をハイライト
-    if (STATE.mode === 'opening' && STATE.pendingOpeningType && STATE.pendingOpeningRoom === p.id) {
+    // 開口モード: 各部屋の4辺すべてにタップ判定
+    if (STATE.mode === 'opening') {
       const edges = [
         { id: 'N', x1: x, y1: y, x2: x+w, y2: y },
         { id: 'S', x1: x, y1: y+h, x2: x+w, y2: y+h },
         { id: 'W', x1: x, y1: y, x2: x, y2: y+h },
         { id: 'E', x1: x+w, y1: y, x2: x+w, y2: y+h },
       ];
+      const editing = STATE.editingOpening;
       edges.forEach(e => {
-        // 透明な太い線(当たり判定を広げる)
+        const isEditingThis = editing && editing.roomPlacedId === p.id && editing.side === e.id;
+        // 透明な太い当たり判定線(必ず描画)
         html += `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" 
-                 stroke="transparent" stroke-width="20" style="cursor:pointer;"
-                 onclick="placeOpeningOnEdge('${e.id}')"/>`;
-        // 見た目の青いハイライト線
-        html += `<line class="edge-highlight-blue" x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" 
-                 onclick="placeOpeningOnEdge('${e.id}')"/>`;
-        // 辺ラベル
-        const mx = (e.x1 + e.x2) / 2;
-        const my = (e.y1 + e.y2) / 2;
-        let lx = mx, ly = my;
-        if (e.id === 'N') ly -= 10;
-        if (e.id === 'S') ly += 16;
-        if (e.id === 'W') lx -= 12;
-        if (e.id === 'E') lx += 12;
-        html += `<text class="edge-label" x="${lx}" y="${ly}" text-anchor="middle">${sideLabel(e.id)}</text>`;
+                 stroke="transparent" stroke-width="22" style="cursor:pointer;"
+                 onclick="event.stopPropagation();tapWall('${p.id}', '${e.id}')"/>`;
+        // 編集中の辺は青く濃くハイライト
+        if (isEditingThis) {
+          html += `<line class="edge-highlight-blue" x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" 
+                   onclick="event.stopPropagation();tapWall('${p.id}', '${e.id}')"/>`;
+        }
       });
     }
   });
@@ -1187,6 +1206,20 @@ function renderCanvas() {
     html += renderOpeningHTML(op, t);
   });
 
+  // 編集中の開口部プレビュー(半透明)
+  if (STATE.mode === 'opening' && STATE.editingOpening) {
+    const e = STATE.editingOpening;
+    const previewOp = {
+      id: '_preview',
+      roomPlacedId: e.roomPlacedId,
+      side: e.side,
+      offset: e.offset,
+      width: e.width,
+      type: MAIN_OPENING_TYPES[e.typeIndex],
+    };
+    html += renderOpeningHTML(previewOp, t, true);
+  }
+
   if (STATE.placed.length === 0) {
     html += `<text x="240" y="270" text-anchor="middle" fill="#8a8a85" font-size="12" font-family="Space Mono">↓ 下から最初の部屋を選択</text>`;
   }
@@ -1194,12 +1227,11 @@ function renderCanvas() {
   svg.innerHTML = html;
 }
 
-function renderOpeningHTML(op, t) {
-  console.log('[DEBUG] renderOpeningHTML called. op:', op);
+function renderOpeningHTML(op, t, isPreview) {
   const placed = STATE.placed.find(p => p.id === op.roomPlacedId);
-  if (!placed) { console.log('[DEBUG] placed not found'); return ''; }
+  if (!placed) { return ''; }
   const room = STATE.property.rooms.find(r => r.id === placed.roomId);
-  if (!room) { console.log('[DEBUG] room not found'); return ''; }
+  if (!room) { return ''; }
 
   let x1, y1, x2, y2;
   switch (op.side) {
@@ -1210,9 +1242,9 @@ function renderOpeningHTML(op, t) {
   }
   const p1 = w2s(x1, y1, t), p2 = w2s(x2, y2, t);
   const isSel = STATE.selection && STATE.selection.type === 'opening' && STATE.selection.id === op.id;
-  const operable = STATE.mode === 'opening';
+  const operable = STATE.mode === 'opening' && !isPreview;
 
-  let html = '<g>';
+  let html = `<g${isPreview ? ' class="opening-preview"' : ''} style="${isPreview ? 'opacity:0.5' : ''}">`;
   const bgPad = 4;
   if (op.side === 'N' || op.side === 'S') {
     html += `<rect class="opening-bg" x="${Math.min(p1.x, p2.x)}" y="${p1.y - bgPad}" width="${Math.abs(p2.x - p1.x)}" height="${bgPad * 2}" />`;
@@ -1268,20 +1300,8 @@ function renderOpeningHTML(op, t) {
     }
   }
   // 'opening' は背景のみ
-
-  // タップハンドル(opening モードのみ、新規配置中は除く)
-  if (operable && !STATE.pendingOpeningType) {
-    const hs = 10;
-    let hx, hy, hw, hh;
-    if (op.side === 'N' || op.side === 'S') {
-      hx = Math.min(p1.x, p2.x) - 2; hy = p1.y - hs;
-      hw = Math.abs(p2.x - p1.x) + 4; hh = hs * 2;
-    } else {
-      hx = p1.x - hs; hy = Math.min(p1.y, p2.y) - 2;
-      hw = hs * 2; hh = Math.abs(p2.y - p1.y) + 4;
-    }
-    html += `<rect class="opening-handle ${isSel ? 'selected' : ''}" x="${hx}" y="${hy}" width="${hw}" height="${hh}" onclick="selectOpening('${op.id}')" />`;
-  }
+  
+  // 既存の opening-handle は新仕様では描画しない(辺タップでアクセス)
 
   html += '</g>';
   return html;
