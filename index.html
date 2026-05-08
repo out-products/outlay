@@ -1269,8 +1269,8 @@ function renderOpeningHTML(op, t) {
   }
   // 'opening' は背景のみ
 
-  // タップハンドル(opening モードのみ)
-  if (operable) {
+  // タップハンドル(opening モードのみ、新規配置中は除く)
+  if (operable && !STATE.pendingOpeningType) {
     const hs = 10;
     let hx, hy, hw, hh;
     if (op.side === 'N' || op.side === 'S') {
