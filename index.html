@@ -400,7 +400,7 @@
 <div class="app">
   <header>
     <div><span class="brand">out<span class="accent">l</span>ay</span></div>
-    <span class="brand-tag mono">v0.5 · prototype</span>
+    <span class="brand-tag mono">v0.5 · debug</span>
   </header>
 
   <!-- Home -->
@@ -974,29 +974,40 @@ function placeNextOn(targetPid, edge) {
 
 // ===== Opening mode =====
 function pickOpeningType(type) {
-  if (STATE.mode !== 'opening') return;
+  console.log('[DEBUG] pickOpeningType called with type:', type);
+  if (STATE.mode !== 'opening') {
+    console.log('[DEBUG] STATE.mode is not opening, returning. mode=', STATE.mode);
+    return;
+  }
   if (STATE.pendingOpeningType === type) {
     // 同じタイプを再タップ → キャンセル
     STATE.pendingOpeningType = null;
     STATE.pendingOpeningRoom = null;
     $('layout-msg').textContent = '下のドア・窓を選択 → 部屋をタップで配置 / 既存の開口部をタップ → 移動・削除';
+    console.log('[DEBUG] Same type re-tapped, canceled');
   } else {
     STATE.pendingOpeningType = type;
     STATE.pendingOpeningRoom = null;
     STATE.selection = null;
     hideCrossPanel();
     $('layout-msg').textContent = `${OPENING_TYPES[type].label}を配置する部屋をタップ`;
+    console.log('[DEBUG] pendingOpeningType set to:', STATE.pendingOpeningType);
   }
   renderToolbar();
   renderCanvas();
 }
 
 function selectRoomForOpening(roomPlacedId) {
-  if (!STATE.pendingOpeningType) return;
+  console.log('[DEBUG] selectRoomForOpening called. roomPlacedId:', roomPlacedId, 'pendingType:', STATE.pendingOpeningType);
+  if (!STATE.pendingOpeningType) {
+    console.log('[DEBUG] pendingOpeningType is null, returning');
+    return;
+  }
   STATE.pendingOpeningRoom = roomPlacedId;
   const placed = STATE.placed.find(x => x.id === roomPlacedId);
   const room = STATE.property.rooms.find(x => x.id === placed.roomId);
   $('layout-msg').textContent = `${room.type} のどの辺に配置しますか? — 青い辺をタップ(部屋を再タップでキャンセル)`;
+  console.log('[DEBUG] pendingOpeningRoom set, type:', STATE.pendingOpeningType, 'room:', room.type);
   renderCanvas();
 }
 
@@ -1007,7 +1018,11 @@ function cancelRoomSelection() {
 }
 
 function placeOpeningOnEdge(side) {
-  if (!STATE.pendingOpeningType || !STATE.pendingOpeningRoom) return;
+  console.log('[DEBUG] placeOpeningOnEdge called. side:', side, 'pendingType:', STATE.pendingOpeningType, 'pendingRoom:', STATE.pendingOpeningRoom);
+  if (!STATE.pendingOpeningType || !STATE.pendingOpeningRoom) {
+    console.log('[DEBUG] guard returned. pendingType=', STATE.pendingOpeningType, 'pendingRoom=', STATE.pendingOpeningRoom);
+    return;
+  }
   const placed = STATE.placed.find(x => x.id === STATE.pendingOpeningRoom);
   const room = STATE.property.rooms.find(x => x.id === placed.roomId);
   const def = OPENING_TYPES[STATE.pendingOpeningType];
@@ -1016,6 +1031,7 @@ function placeOpeningOnEdge(side) {
   // 中央配置(壁の中央に配置)、壁が短い場合は幅も縮小
   const finalWidth = Math.min(w, wallLen);
   const offset = Math.max(0, (wallLen - finalWidth) / 2);
+  console.log('[DEBUG] placement values: side=', side, 'wallLen=', wallLen, 'finalWidth=', finalWidth, 'offset=', offset);
 
   const opId = 'op_' + Date.now();
   STATE.openings.push({
@@ -1026,6 +1042,7 @@ function placeOpeningOnEdge(side) {
     width: finalWidth,
     type: STATE.pendingOpeningType,
   });
+  console.log('[DEBUG] opening pushed. openings now:', STATE.openings.length, 'last:', STATE.openings[STATE.openings.length - 1]);
   STATE.pendingOpeningType = null;
   STATE.pendingOpeningRoom = null;
   STATE.selection = { type: 'opening', id: opId };
@@ -1178,10 +1195,11 @@ function renderCanvas() {
 }
 
 function renderOpeningHTML(op, t) {
+  console.log('[DEBUG] renderOpeningHTML called. op:', op);
   const placed = STATE.placed.find(p => p.id === op.roomPlacedId);
-  if (!placed) return '';
+  if (!placed) { console.log('[DEBUG] placed not found'); return ''; }
   const room = STATE.property.rooms.find(r => r.id === placed.roomId);
-  if (!room) return '';
+  if (!room) { console.log('[DEBUG] room not found'); return ''; }
 
   let x1, y1, x2, y2;
   switch (op.side) {
